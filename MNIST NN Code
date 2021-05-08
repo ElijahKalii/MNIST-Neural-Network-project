@@ -1,0 +1,82 @@
+%matplotlib inline
+import numpy as np
+import matplotlib.pyplot as plt
+import torch
+import torch.nn as nn
+from torchvision import datasets, transforms
+import torch.nn.functional as F
+
+#1. prepare the data
+mnist_train_set = datasets.MNIST(root='./MNIST', train=True, transform=transforms.ToTensor(), download=True)  
+mnist_test_set = datasets.MNIST(root='./MNIST', train=False, transform=transforms.ToTensor(), download=True)
+
+mnist_train_loader = torch.utils.data.DataLoader(dataset=mnist_train_set, batch_size=100, shuffle=True)
+mnist_test_loader = torch.utils.data.DataLoader(dataset=mnist_test_set, batch_size=100, shuffle=False)
+
+
+#INITIALIZE HYPER PARAMETERS
+dim_in = 784     #28x28 images
+hidden_dim = 500
+dim_out = 10
+batch_size = 100
+num_epochs = 5
+learning_rate = 0.01
+
+#CREATE MODEL
+class MLP_MNIST_Model(nn.Module):
+    def __init__(self, dim_in, hidden_dim, dim_out):
+        super(MLP_MNIST_Model, self).__init__()
+        self.layer1 = nn.Linear(dim_in, hidden_dim)
+        self.relu = nn.ReLU()
+        self.layer2 = nn.Linear(hidden_dim, dim_out)
+    
+    def forward(self, x):
+        output = self.layer1(x)
+        output = self.relu(output)
+        output = self.layer2(output)
+        return output
+
+model = MLP_MNIST_Model(dim_in, hidden_dim, dim_out)
+
+
+#DEFINE LOSS AND OPTIMIZE MODEL
+criterion = nn.CrossEntropyLoss()     
+optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
+
+
+#TRAIN MODEL
+n_total_steps = len(mnist_train_loader)    #number of training steps equal to the data
+for epoch in range(num_epochs):
+    for i, (images, labels) in enumerate(mnist_train_loader):
+        images = images.reshape(-1, 28*28) #reshape the images to 100x784
+        labels = labels
+        
+        #forward pass
+        outputs = model(images)
+        loss = criterion(outputs, labels)
+        
+        #backward pass
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        
+        if (i+1) % 100 == 0:
+            print(f'epoch: {epoch+1}/{num_epochs}, step {i+1}/{n_total_steps}, loss={loss.item():.4f}')
+  
+
+# TEST MODEL
+with torch.no_grad():
+    n_correct = 0
+    total = len(mnist_test_set)
+    
+    for images, labels in mnist_test_loader: 
+        #Forward pass
+        images = images.view(-1, 28*28)
+        labels = labels
+        outputs = model(images)
+        
+        _, predictions = torch.max(outputs, 1)  #output the maximum of the outputs. value and index/class label
+        n_correct += (predictions == labels).sum().item()    #we add 1 for each correct prediction
+    
+    acc = 100.0 * n_correct / total      #accuracy as a %
+    print(f'\nThe model accuracy is {acc:.3f}')
